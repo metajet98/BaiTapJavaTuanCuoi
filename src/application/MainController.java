@@ -17,6 +17,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.ResourceBundle;
 
+import com.mysql.cj.xdevapi.Table;
+
 import java.util.Date;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.value.ObservableValue;
@@ -91,8 +93,11 @@ public class MainController implements Initializable{
 
 	    @FXML
 	    private Button btnMoCSDL;
+	    @FXML
+	    private TableView tbwThongKe;
 	    
 	    private ObservableList<ObservableList> data= FXCollections.observableArrayList();
+	    private ObservableList<ObservableList> dataCheckGV= FXCollections.observableArrayList();
 		
 		Connection connection = null;
 	    PreparedStatement preparedStatement = null;
@@ -127,6 +132,7 @@ public class MainController implements Initializable{
 			System.out.println("Connect succeed!");
 			
 			LoadCSDL();
+			
 			EndableButtonWhileConnectToDB();
 			
 		} catch (SQLException e) {
@@ -142,7 +148,6 @@ public class MainController implements Initializable{
 		tbvLichGiangDay.getColumns().clear();
 	    ResultSet rs;
 		try {
-			
 			rs = statement.executeQuery("SELECT * FROM LichGiangDay");
 			System.out.println(rs.toString());
 			ResultSetMetaData rsmd = rs.getMetaData();
@@ -176,10 +181,74 @@ public class MainController implements Initializable{
 			tbvLichGiangDay.setItems(data);
 			
 			
+			
 		} catch (SQLException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		GetThongKe();
+		LoadThongTinThem();
+
+	}
+	
+	
+	void LoadThongTinThem()
+	{
+		int numClass=0;
+		int numGV=0;
+		int numEndedClass=0;
+		int numLiveClass=0;
+		String smallestClass="";
+		String largestClass="";
+		
+		try {
+			ResultSetMetaData rsmd=null;
+			ResultSet resultSet=null;
+			Statement statement= connection.createStatement();
+			
+			resultSet= statement.executeQuery("select count(STT) FROM lichgiangday");
+			while(resultSet.next())
+			{
+				numClass=resultSet.getInt(1);
+			}
+			
+			resultSet= statement.executeQuery("select count(distinct TenGV) FROM lichgiangday");
+			while(resultSet.next())
+			{
+				numGV=resultSet.getInt(1);
+			}
+			
+			resultSet= statement.executeQuery("select count(STT) FROM lichgiangday WHERE NgayKetThuc>='2018-05-28'");
+			while(resultSet.next())
+			{
+				numLiveClass=resultSet.getInt(1);
+			}
+			numEndedClass=numClass-numLiveClass;
+			
+			resultSet= statement.executeQuery("select MaLop From lichgiangday WHERE SiSo= (select max(SiSo) FROM lichgiangday)");
+			while(resultSet.next())
+			{
+				largestClass=resultSet.getString(1);
+			}
+			
+			resultSet= statement.executeQuery("select MaLop From lichgiangday WHERE SiSo= (select min(SiSo) FROM lichgiangday)");
+			while(resultSet.next())
+			{
+				smallestClass=resultSet.getString(1);
+			}
+			
+			
+			txtLopItNhat.setText(smallestClass);
+			txtLopNhieuNhat.setText(largestClass);
+			txtSoGV.setText(numGV+"");
+			txtSoLop.setText(numClass+"");
+			txtSoLopDienRa.setText(numLiveClass+"");
+			txtSoLopKetThuc.setText(numEndedClass+"");
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
 	}
 	void LoadDataFromTWToTxt(int index)
 	{	
@@ -290,11 +359,76 @@ public class MainController implements Initializable{
     	txtSiSo.clear();
     	
     }
+    void GetThongKe()
+    {	
+    	
+    	dataCheckGV.clear();
+    	tbwThongKe.getColumns().clear();
+    	ResultSet rsGV=null;
+    	try {
+    		Statement GVStament=connection.createStatement();
+    		
+			rsGV= statement.executeQuery("select distinct TenGV From lichgiangday");
+			ResultSet rsSoTietGV=null;
+			
+			
+			TableColumn col1 = new TableColumn("GV");
+			TableColumn col2 = new TableColumn("Số tiết");
+			TableColumn col3= new TableColumn("Tiêu chuẩn");
+			
+            col1.setCellValueFactory(new Callback<CellDataFeatures<ObservableList,String>,ObservableValue<String>>(){                    
+                public ObservableValue<String> call(CellDataFeatures<ObservableList, String> param) {                                                                                              
+                    return new SimpleStringProperty(param.getValue().get(0).toString());                        
+                }                    
+            });
+            col2.setCellValueFactory(new Callback<CellDataFeatures<ObservableList,String>,ObservableValue<String>>(){                    
+                public ObservableValue<String> call(CellDataFeatures<ObservableList, String> param) {                                                                                              
+                    return new SimpleStringProperty(param.getValue().get(1).toString());                        
+                }                    
+            });
+            col3.setCellValueFactory(new Callback<CellDataFeatures<ObservableList,String>,ObservableValue<String>>(){                    
+                public ObservableValue<String> call(CellDataFeatures<ObservableList, String> param) {                                                                                              
+                    return new SimpleStringProperty(param.getValue().get(2).toString());                        
+                }                    
+            });
 
+            tbwThongKe.getColumns().addAll(col1,col2,col3); 
+            
+            
+			while(rsGV.next())
+			{	 
+				ObservableList<String> row = FXCollections.observableArrayList();
+				String nameGV=rsGV.getString(1);
+				System.out.println(nameGV);
+				row.add(nameGV);
+				rsSoTietGV=GVStament.executeQuery("select sum(SoTiet) FROM lichgiangday WHERE TenGV='"+nameGV+"'");
+				while(rsSoTietGV.next())
+				{	
+					int soTiet=rsSoTietGV.getInt(1);
+					row.add(rsSoTietGV.getInt(1)+"");
+					if(soTiet>=135)
+					{
+						row.add("Đạt");
+					}
+					else
+					{
+						row.add("Không đạt");
+					}
+				}
+				dataCheckGV.add(row);
+			}
+			tbwThongKe.setItems(dataCheckGV);
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+    	
+    }
     @FXML
     void handleMoCSDL(ActionEvent event) {
     	System.out.println("Mo CSDL");
     	MoCSDL();
+
     }
 	
 }
